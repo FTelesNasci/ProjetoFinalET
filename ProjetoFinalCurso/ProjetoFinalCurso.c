@@ -1,10 +1,15 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include "aht10.h"
+#include "bh1750.h"
 
 #define WIFI_SSID "ITSelf"
 #define WIFI_SENHA "code2020"
 
+void task_hello(void *pvParameters);
 
 int main()
 {
@@ -30,8 +35,25 @@ int main()
         printf("IP address %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
     }
 
-    while (true) {
-        printf("Hello, world!\n");
-        sleep_ms(1000);
+    xTaskCreate(task_hello, "Hello", 1024, NULL, 1, NULL);
+
+    vTaskStartScheduler();
+
+    while (true) {    
     }
+}
+
+void task_hello(void *pvParameters)
+{
+    while (1)
+    {
+        printf("Hello, world! ou a task FreeRTOS\n");
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+
+void task_humidade_temperatura (void *pvParameters)
+{
+ // Começar a partir daqui Adriano 
 }
