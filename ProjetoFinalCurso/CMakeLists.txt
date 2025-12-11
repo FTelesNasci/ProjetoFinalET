@@ -41,6 +41,7 @@ add_executable(ProjetoFinalCurso
         ProjetoFinalCurso.c
         lib/aht10/aht10.c
         lib/bh1750/bh1750.c
+        lib/ssd1306/ssd1306.c
 )
 
 pico_set_program_name(ProjetoFinalCurso "ProjetoFinalCurso")
@@ -63,6 +64,7 @@ target_include_directories(ProjetoFinalCurso PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/lib
         ${CMAKE_CURRENT_LIST_DIR}/lib/aht10
         ${CMAKE_CURRENT_LIST_DIR}/lib/bh1750
+        ${CMAKE_CURRENT_LIST_DIR}/lib/ssd1306
 )
 
 # Add any user requested libraries
