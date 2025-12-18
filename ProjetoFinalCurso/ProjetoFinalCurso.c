@@ -28,6 +28,7 @@
 typedef struct {
     float temperature;
     float humidity;
+    float lux;
 } SensorData_t;
 
 // =======================================================
@@ -156,30 +157,29 @@ void TaskSensor(void *pv)
     };
 
     printf("Inicializando AHT10...\n");
-
     if (!AHT10_Init(&aht10)) {
-        printf("FALHA ao inicializar AHT10!\n");
-        while (1) vTaskDelay(1000);
+        printf("ERRO AHT10\n");
+        vTaskDelete(NULL);
     }
 
-    printf("AHT10 pronto!\n");
+    printf("Inicializando BH1750...\n");
+    bh1750_init(I2C_PORT_AHT);
 
     while (1)
     {
-        float t, h;
+        SensorData_t data = {0};
 
-        if (AHT10_ReadTemperatureHumidity(&aht10, &t, &h))
+        if (AHT10_ReadTemperatureHumidity(&aht10,
+                                          &data.temperature,
+                                          &data.humidity))
         {
-            SensorData_t data = {
-                .temperature = t,
-                .humidity = h
-            };
+            float lux = bh1750_read_lux(I2C_PORT_AHT);
+            data.lux = (lux >= 0.0f) ? lux : -1.0f;
 
-            // Mantém sempre o último valor (não bloqueia)
             xQueueOverwrite(xSensorQueue, &data);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(1000));  // Leitura a cada 1s
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -189,56 +189,26 @@ void TaskSensor(void *pv)
 void TaskDisplay(void *pv)
 {
     SensorData_t data;
-    char temp_str[16];
-    char hum_str[16];
+    char buf[16];
 
     while (1)
     {
-        // Lê SEM CONSUMIR a fila
         if (xQueuePeek(xSensorQueue, &data, portMAX_DELAY))
         {
-            float t = data.temperature;
-            float h = data.humidity;
-
             ssd1306_clear();
-            ssd1306_draw_string(32, 0, "Embarcatech");
-            ssd1306_draw_string(30, 10, "AHT10 Sensor");
+            ssd1306_draw_string(28, 0, "Embarcatech");
 
-            // ALERTA 1 — umidade alta
-            if (h > 70.0)
-            {
-                snprintf(hum_str, sizeof(hum_str), "%.2f %%", h);
-                ssd1306_draw_string(0, 20, "Umidade:");
-                ssd1306_draw_string(85, 20, hum_str);
-                ssd1306_draw_string(22, 40, "Acima de 70%");
-                ssd1306_draw_string(40, 50, "ATENCAO");
-                ssd1306_show();
-                vTaskDelay(pdMS_TO_TICKS(300));
-                continue;
-            }
+            snprintf(buf, sizeof(buf), "%.2f C", data.temperature);
+            ssd1306_draw_string(0, 16, "Temp:");
+            ssd1306_draw_string(80, 16, buf);
 
-            // ALERTA 2 — temperatura baixa
-            if (t < 20.0)
-            {
-                snprintf(temp_str, sizeof(temp_str), "%.2f C", t);
-                ssd1306_draw_string(0, 20, "Temp:");
-                ssd1306_draw_string(85, 20, temp_str);
-                ssd1306_draw_string(20, 40, "Abaixo de 20C");
-                ssd1306_draw_string(40, 50, "ATENCAO");
-                ssd1306_show();
-                vTaskDelay(pdMS_TO_TICKS(300));
-                continue;
-            }
+            snprintf(buf, sizeof(buf), "%.2f %%", data.humidity);
+            ssd1306_draw_string(0, 32, "Umid:");
+            ssd1306_draw_string(80, 32, buf);
 
-            // MODO NORMAL
-            snprintf(temp_str, sizeof(temp_str), "%.2f C", t);
-            snprintf(hum_str, sizeof(hum_str), "%.2f %%", h);
-
-            ssd1306_draw_string(0, 30, "Temperatura");
-            ssd1306_draw_string(85, 30, temp_str);
-
-            ssd1306_draw_string(0, 50, "Umidade");
-            ssd1306_draw_string(85, 50, hum_str);
+            snprintf(buf, sizeof(buf), "%.1f lx", data.lux);
+            ssd1306_draw_string(0, 48, "Luz:");
+            ssd1306_draw_string(80, 48, buf);
 
             ssd1306_show();
         }
