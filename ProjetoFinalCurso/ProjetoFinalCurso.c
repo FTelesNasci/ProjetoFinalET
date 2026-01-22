@@ -71,6 +71,8 @@ int main()
 
     // Inicializa OLED
     ssd1306_init(I2C_PORT_OLED);
+    ssd1306_clear();
+    ssd1306_draw_string(28, 0, "Embarcatech");
 
     // Initialise the Wi-Fi chip
     if (cyw43_arch_init()) {
@@ -137,7 +139,7 @@ void task_hello(void *pvParameters)
 {
     while (1)
     {
-        printf("Hello, world! ou a task FreeRTOS\n");
+        printf("Alô, Mundo! ou a task FreeRTOS\n");
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
