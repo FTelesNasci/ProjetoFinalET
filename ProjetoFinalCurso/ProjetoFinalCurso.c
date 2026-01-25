@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
+#include "lwip/apps/mqtt.h"
+#include "lwip/ip_addr.h"
+#include "lwip/dns.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
@@ -8,8 +11,19 @@
 #include "bh1750.h"
 #include "ssd1306.h"
 
+// Wi-fi
 #define WIFI_SSID "ITSelf"
 #define WIFI_SENHA "code2020"
+
+// Configurações MQTT
+#define MQTT_BROKER "broker.hivemq.com"
+#define MQTT_BROKER_PORT 1883
+#define MQTT_TOPIC "embarca/tem_lux"
+
+// Variáveis Globais
+static mqtt_client_t *mqtt_client;
+static ip_addr_t broker_ip;
+static bool mqtt_connected = false;
 
 // =======================================================
 // CONFIGURAÇÃO DE PINOS E CONSTANTES
@@ -46,6 +60,13 @@ int i2c_write_wrapper(uint8_t addr, const uint8_t *data, uint16_t len);
 int i2c_read_wrapper(uint8_t addr, uint8_t *data, uint16_t len);
 void delay_ms_wrapper(uint32_t ms);
 void task_hello(void *pvParameters);
+void TaskMQTT(void *pv);
+
+// Protótipo das Funções
+static void mqtt_connection_callback(mqtt_client_t *client, void *arg, mqtt_connection_status_t status);
+void publish_msg(bool button_pressed, float temp_c);
+//float read_temperature();
+void dns_check_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg);
 
 int main()
 {
@@ -94,6 +115,20 @@ int main()
         printf("IP address %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
     }
 
+    // Inicializa cliente MQTT
+    mqtt_client = mqtt_client_new();
+
+    // Resolve DNS do broker MQTT
+    err_t err = dns_gethostbyname(MQTT_BROKER, &broker_ip, dns_check_callback, NULL);
+    if (err == ERR_OK) {
+        dns_check_callback(MQTT_BROKER, &broker_ip, NULL);
+    } else if (err == ERR_INPROGRESS) {
+        printf("[DNS] Resolvendo...\n");
+    } else {
+        printf("[DNS] Erro ao resolver DNS: %d\n", err);
+        return -1;
+    }
+
     // -------------------
     // CRIA A QUEUE
     // -------------------
@@ -107,6 +142,8 @@ int main()
     xTaskCreate(TaskDisplay, "Display", 1024, NULL, 1, NULL);
     xTaskCreate(TaskSerial,  "Serial",  1024, NULL, 1, NULL);
     xTaskCreate(task_hello, "Hello", 1024, NULL, 1, NULL);
+    xTaskCreate(TaskMQTT, "MQTT", 2048, NULL, 2, NULL);
+
 
     vTaskStartScheduler();
 
@@ -134,6 +171,40 @@ void delay_ms_wrapper(uint32_t ms)
     vTaskDelay(pdMS_TO_TICKS(ms));
 }
 
+// Callback de conexão MQTT
+static void mqtt_connection_callback(mqtt_client_t *client, void *arg, mqtt_connection_status_t status) {
+    if (status == MQTT_CONNECT_ACCEPTED) {
+        printf("[MQTT] Conectado ao broker!\n");
+        mqtt_connected = true;
+    } else {
+        printf("[MQTT] Falha na conexão MQTT. Código: %d\n", status);
+        mqtt_connected = false;
+    }
+}
+
+// Callback de DNS
+void dns_check_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
+    if (ipaddr != NULL) {
+        broker_ip = *ipaddr;
+        printf("[DNS] Resolvido: %s -> %s\n", name, ipaddr_ntoa(ipaddr));
+
+        struct mqtt_connect_client_info_t client_info = {
+            .client_id = "pico-client",
+            .keep_alive = 60,
+            .client_user = NULL,
+            .client_pass = NULL,
+            .will_topic = NULL,
+            .will_msg = NULL,
+            .will_qos = 0,
+            .will_retain = 0
+        };
+
+        printf("[MQTT] Conectando ao broker...\n");
+        mqtt_client_connect(mqtt_client, &broker_ip, MQTT_BROKER_PORT, mqtt_connection_callback, NULL, &client_info);
+    } else {
+        printf("[DNS] Falha ao resolver DNS para %s\n", name);
+    }
+}
 
 void task_hello(void *pvParameters)
 {
@@ -239,3 +310,56 @@ void TaskSerial(void *pv)
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
+
+void publish_sensor_data(const SensorData_t *data)
+{
+    if (!mqtt_connected) {
+        printf("[MQTT] Não conectado\n");
+        return;
+    }
+
+    char payload[160];
+
+    snprintf(payload, sizeof(payload),
+        "{"
+        "\"temperatura\": %.2f,"
+        "\"umidade\": %.2f,"
+        "\"luminosidade\": %.1f"
+        "}",
+        data->temperature,
+        data->humidity,
+        data->lux
+    );
+
+    err_t err = mqtt_publish(
+        mqtt_client,
+        MQTT_TOPIC,
+        payload,
+        strlen(payload),
+        0,
+        0,
+        NULL,
+        NULL
+    );
+
+    if (err == ERR_OK)
+        printf("[MQTT] Enviado: %s\n", payload);
+    else
+        printf("[MQTT] Erro publish: %d\n", err);
+}
+
+void TaskMQTT(void *pv)
+{
+    SensorData_t data;
+
+    while (1)
+    {
+        if (xQueuePeek(xSensorQueue, &data, portMAX_DELAY))
+        {
+            publish_sensor_data(&data);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(2000)); // intervalo MQTT
+    }
+}
+

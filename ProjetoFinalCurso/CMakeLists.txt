@@ -70,6 +70,7 @@ target_include_directories(ProjetoFinalCurso PRIVATE
 # Add any user requested libraries
 target_link_libraries(ProjetoFinalCurso 
         pico_cyw43_arch_lwip_threadsafe_background
+        pico_lwip_mqtt
         hardware_i2c
         )
 
