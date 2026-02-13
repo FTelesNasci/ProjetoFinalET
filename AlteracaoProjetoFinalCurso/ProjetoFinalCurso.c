@@ -1,8 +1,5 @@
-// configuração inicial do firmware para Raspberry Pi Pico W
-// Inclusão das bibliotecas;
-// Conexões com os sensores
-
 #include <stdio.h>
+#include "hardware/pwm.h"
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 #include "lwip/apps/mqtt.h"
@@ -16,38 +13,54 @@
 #include "ssd1306.h"
 
 // Wi-fi
+//#define WIFI_SSID "Lu e Deza"
+//#define WIFI_SENHA "liukin1208"
 // #define WIFI_SSID "ITSelf"
 // #define WIFI_SENHA "code2020"
 #define WIFI_SSID "Teles"
 #define WIFI_SENHA "Sophia2013%"
 
-// Configurações MQTT
-#define MQTT_BROKER "broker.hivemq.com" // Localização do IP da conexão com o MQTT
-#define MQTT_BROKER_PORT 1883 // Porta de comunicação
-#define MQTT_TOPIC "embarca/tem_lux" //status do sensor de luminosidade
 
-// Variáveis Globais de comunicação para dizer o funcionamento do sistema MQTT
+// Configurações MQTT
+#define MQTT_BROKER "broker.hivemq.com"
+#define MQTT_BROKER_PORT 1883
+#define MQTT_TOPIC "embarca/tem_lux"
+
+// Variáveis Globais
 static mqtt_client_t *mqtt_client;
 static ip_addr_t broker_ip;
 static bool mqtt_connected = false;
+volatile bool buzzer_alarm = false;
+
 
 // =======================================================
 // CONFIGURAÇÃO DE PINOS E CONSTANTES
 // =======================================================
-// Sensores 
 #define I2C_PORT_AHT  i2c0
 #define SDA_AHT       0
 #define SCL_AHT       1
 
-// e display
 #define I2C_PORT_OLED i2c1
 #define SDA_OLED      14
 #define SCL_OLED      15
 
 // =======================================================
+// BUZZER PASSIVO (PWM)
+// =======================================================
+#define BUZZER_PIN       21
+#define BUZZER_FREQ_HZ   2500
+#define LED_ALARM_ON   13
+#define LED_ALARM_OFF  11
+
+//=========================================================
+// Limiares de temperatura para controle do alarme (histerese)
+//=========================================================
+#define TEMP_LIMIT_ON    27.0f          // Ligar alarme acima de 27°C
+#define TEMP_LIMIT_OFF   26.0f          // Desligar alarme abaixo de 26°C (histerese)
+
+// =======================================================
 // ESTRUTURA DE DADOS PARA A FILA
 // =======================================================
-// Armazenamento, medições, fila (FreeRTOS) e compartilhamento
 typedef struct {
     float temperature;
     float humidity;
@@ -62,12 +75,8 @@ QueueHandle_t xSensorQueue;
 // =======================================================
 // PROTÓTIPOS DAS TASKS E FUNÇÕES
 // =======================================================
-// Aquisição dos sensores;
-// Exibição;
-// Comunicação com o MQTT;
-// Temporização;
-// Integração
 void TaskSensor(void *pv);
+void TaskBuzzer(void *pv);
 void TaskDisplay(void *pv);
 void TaskSerial(void *pv);
 int i2c_write_wrapper(uint8_t addr, const uint8_t *data, uint16_t len);
@@ -79,14 +88,9 @@ void TaskMQTT(void *pv);
 // Protótipo das Funções
 static void mqtt_connection_callback(mqtt_client_t *client, void *arg, mqtt_connection_status_t status);
 void publish_msg(bool button_pressed, float temp_c);
-// Verificar essa variável abaixo;
-// Float read_temperature();
+//float read_temperature();
 void dns_check_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg);
 
-// Configuração dos periféricos;
-// Inicialização dos barramentos I2C (sensores e display);
-// Exibição de mensagens à Raspberry;
-// Conexão com IoT.
 int main()
 {
     stdio_init_all();
@@ -115,16 +119,14 @@ int main()
     ssd1306_draw_string(28, 0, "Embarcatech");
 
     // Initialise the Wi-Fi chip
-    if (cyw43_arch_init()) 
-    {
+    if (cyw43_arch_init()) {
         printf("Wi-Fi init failed\n");
         return -1;
     }
-    // Conexão com a rede Wi-Fi
-    // Comunicação com IoT
+
     // Enable wifi station
     cyw43_arch_enable_sta_mode();
-    // Comunicação com o Wi-Fi
+
     printf("Connecting to Wi-Fi...\n");
     if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_SENHA, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
         printf("failed to connect.\n");
@@ -136,34 +138,49 @@ int main()
         printf("IP address %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
     }
 
-    // Inicializa a conexão com o MQTT
+    // Inicializa cliente MQTT
     mqtt_client = mqtt_client_new();
 
     // Resolve DNS do broker MQTT
-    // Comunicação e avisa se houve falha
     err_t err = dns_gethostbyname(MQTT_BROKER, &broker_ip, dns_check_callback, NULL);
-    if (err == ERR_OK) 
-    {
+    if (err == ERR_OK) {
         dns_check_callback(MQTT_BROKER, &broker_ip, NULL);
-    } 
-    else if (err == ERR_INPROGRESS) 
-    {
+    } else if (err == ERR_INPROGRESS) {
         printf("[DNS] Resolvendo...\n");
-    }
-     else 
-    {
+    } else {
         printf("[DNS] Erro ao resolver DNS: %d\n", err);
         return -1;
     }
 
+    // Configura BUZZER como PWM
+    gpio_set_function(BUZZER_PIN, GPIO_FUNC_PWM);
+
+    uint slice_num = pwm_gpio_to_slice_num(BUZZER_PIN);
+    uint channel   = pwm_gpio_to_channel(BUZZER_PIN);
+
+    uint32_t clock = 125000000; // clock padrão RP2040
+    uint32_t divider = 4;
+    uint32_t wrap = (clock / (divider * BUZZER_FREQ_HZ)) - 1;
+
+    pwm_config config = pwm_get_default_config();
+    pwm_config_set_clkdiv(&config, divider);
+    pwm_config_set_wrap(&config, wrap);
+
+    pwm_init(slice_num, &config, true);
+    pwm_set_chan_level(slice_num, channel, 0); // inicia desligado
+
+    gpio_init(LED_ALARM_ON);
+    gpio_set_dir(LED_ALARM_ON, GPIO_OUT);
+    gpio_put(LED_ALARM_ON, 0);
+
+    gpio_init(LED_ALARM_OFF);
+    gpio_set_dir(LED_ALARM_OFF, GPIO_OUT);
+    gpio_put(LED_ALARM_OFF, 1); // começa indicando sistema normal
+
+
     // -------------------
     // CRIA A QUEUE
     // -------------------
-    // Criação da fila;
-    // Comunicação com a FreeRTOS;
-    // Inicialização das tarefa;
-    // Armazenamento e compartilhamento;
-    // Sensores, display, MQTT, Execução e Prioridades
     xSensorQueue = xQueueCreate(1, sizeof(SensorData_t));
     xQueueReset(xSensorQueue);
 
@@ -174,8 +191,8 @@ int main()
     xTaskCreate(TaskDisplay, "Display", 1024, NULL, 1, NULL);
     xTaskCreate(TaskSerial,  "Serial",  1024, NULL, 1, NULL);
     xTaskCreate(task_hello, "Hello", 1024, NULL, 1, NULL);
-    xTaskCreate(TaskMQTT, "MQTT", 4096, NULL, 2, NULL);
-
+    xTaskCreate(TaskMQTT, "MQTT", 2048, NULL, 2, NULL);
+    xTaskCreate(TaskBuzzer, "Buzzer", 512, NULL, 2, NULL);
 
     vTaskStartScheduler();
 
@@ -186,10 +203,6 @@ int main()
 // =======================================================
 // WRAPPERS PARA O DRIVER DO AHT10
 // =======================================================
-// Temporização;
-// Integração com os sensores ao FreeRTOS;
-// Gerenciamento da conexão com o MQQT;
-// Compartibilidade e confiabilidade com a comunicação.
 int i2c_write_wrapper(uint8_t addr, const uint8_t *data, uint16_t len)
 {
     int r = i2c_write_blocking(I2C_PORT_AHT, addr, data, len, false);
@@ -207,32 +220,24 @@ void delay_ms_wrapper(uint32_t ms)
     vTaskDelay(pdMS_TO_TICKS(ms));
 }
 
-
 // Callback de conexão MQTT
-// Tem a função de transmitir a informação, varredura, executa a função;
 static void mqtt_connection_callback(mqtt_client_t *client, void *arg, mqtt_connection_status_t status) {
     if (status == MQTT_CONNECT_ACCEPTED) {
         printf("[MQTT] Conectado ao broker!\n");
         mqtt_connected = true;
-    } 
-    else 
-    {
+    } else {
         printf("[MQTT] Falha na conexão MQTT. Código: %d\n", status);
         mqtt_connected = false;
     }
 }
-// Inicia a comunicação com o MQTT;
-// Serviço remoto;
-// Emissão periódica das mensagens
+
 // Callback de DNS
-void dns_check_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg) 
-{
-    if (ipaddr != NULL) 
-    {
+void dns_check_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
+    if (ipaddr != NULL) {
         broker_ip = *ipaddr;
         printf("[DNS] Resolvido: %s -> %s\n", name, ipaddr_ntoa(ipaddr));
-        struct mqtt_connect_client_info_t client_info = 
-        {
+
+        struct mqtt_connect_client_info_t client_info = {
             .client_id = "pico-client",
             .keep_alive = 60,
             .client_user = NULL,
@@ -245,30 +250,24 @@ void dns_check_callback(const char *name, const ip_addr_t *ipaddr, void *callbac
 
         printf("[MQTT] Conectando ao broker...\n");
         mqtt_client_connect(mqtt_client, &broker_ip, MQTT_BROKER_PORT, mqtt_connection_callback, NULL, &client_info);
-    } 
-    else 
-    {
+    } else {
         printf("[DNS] Falha ao resolver DNS para %s\n", name);
     }
 }
 
- void task_hello(void *pvParameters)
- {
-     while (1)
-     {
-         printf("Alô, Mundo! ou a task FreeRTOS\n");
-         vTaskDelay(pdMS_TO_TICKS(1000));
-     }
- }
+void task_hello(void *pvParameters)
+{
+    while (1)
+    {
+        printf("Alô, Mundo! ou a task FreeRTOS\n");
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
 
 
 // =======================================================
 // TASK — SENSOR AHT10
 // =======================================================
-// Comunicação entre os sensores;
-// Leitura dos sensores;
-// Armazenamento de dados;
-// Aquisição periódica.
 void TaskSensor(void *pv)
 {
     AHT10_Handle aht10 = {
@@ -299,6 +298,16 @@ void TaskSensor(void *pv)
             float lux = bh1750_read_lux(I2C_PORT_AHT);
             data.lux = (lux >= 0.0f) ? lux : -1.0f;
 
+            // --------- Controle de Alarme com Histerese ---------
+            if (data.temperature > TEMP_LIMIT_ON)
+            {
+                buzzer_alarm = true;
+            }
+            else if (data.temperature < TEMP_LIMIT_OFF)
+            {
+                buzzer_alarm = false;
+            }
+
             xQueueOverwrite(xSensorQueue, &data);
         }
 
@@ -309,9 +318,6 @@ void TaskSensor(void *pv)
 // =======================================================
 // TASK — DISPLAY OLED
 // =======================================================
-// Interface do sistema;
-// Atualização cíclica;
-// Atraso e estabilidade.
 void TaskDisplay(void *pv)
 {
     SensorData_t data;
@@ -346,11 +352,8 @@ void TaskDisplay(void *pv)
 // =======================================================
 // TASK — SERIAL (UART DEBUG)
 // =======================================================
-// Leitura;
-// Exibição periódica dos dados;
-// MQTT
- void TaskSerial(void *pv)
- {
+void TaskSerial(void *pv)
+{
     SensorData_t data;
 
     while (1)
@@ -363,35 +366,13 @@ void TaskDisplay(void *pv)
                    data.humidity);
         }
 
-       vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
- }
-
-
-// Adicionei agora
-// void TaskSerial(void *pv)
-// {
-//    SensorData_t data;
-
-//    while (1)
-//    {
-//        if (xQueuePeek(xSensorQueue, &data, portMAX_DELAY))
-//        {
-//            printf("Temp: %.2f C | Umid: %.2f %% | Luz: %.1f lx\n",
-//                   data.temperature,
-//                   data.humidity,
-//                   data.lux);
-//        }
-
-//        vTaskDelay(pdMS_TO_TICKS(5000));
-//    }
-//}
-
+}
 
 void publish_sensor_data(const SensorData_t *data)
 {
-    if (!mqtt_connected)
-    {
+    if (!mqtt_connected) {
         printf("[MQTT] Não conectado\n");
         return;
     }
@@ -408,9 +389,7 @@ void publish_sensor_data(const SensorData_t *data)
         data->humidity,
         data->lux
     );
-// Publicação dos dados;
-// Registro de mensagem (erro ou acerto);
-// Leitura, fila, execução e transmissão;
+
     err_t err = mqtt_publish(
         mqtt_client,
         MQTT_TOPIC,
@@ -439,7 +418,45 @@ void TaskMQTT(void *pv)
             publish_sensor_data(&data);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(5000)); // intervalo MQTT
+        vTaskDelay(pdMS_TO_TICKS(2000)); // intervalo MQTT
+    }
+}
+
+void TaskBuzzer(void *pv)
+{
+    uint slice_num = pwm_gpio_to_slice_num(BUZZER_PIN);
+    uint channel   = pwm_gpio_to_channel(BUZZER_PIN);
+
+    uint32_t clock = 125000000;
+    uint32_t divider = 4;
+    uint32_t wrap = (clock / (divider * BUZZER_FREQ_HZ)) - 1;
+
+    uint32_t duty = wrap / 2; // 50%
+
+    while (1)
+    {
+        if (buzzer_alarm)
+        {
+            // LED estado ALARME
+            gpio_put(LED_ALARM_ON, 1);
+            gpio_put(LED_ALARM_OFF, 0);
+
+            // Som intermitente
+            pwm_set_chan_level(slice_num, channel, duty);
+            vTaskDelay(pdMS_TO_TICKS(200));
+
+            pwm_set_chan_level(slice_num, channel, 0);
+            vTaskDelay(pdMS_TO_TICKS(200));
+        }
+        else
+        {
+            // LED estado NORMAL
+            gpio_put(LED_ALARM_ON, 0);
+            gpio_put(LED_ALARM_OFF, 1);
+
+            pwm_set_chan_level(slice_num, channel, 0);
+            vTaskDelay(pdMS_TO_TICKS(500));
+        }
     }
 }
 

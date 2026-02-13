@@ -89,7 +89,7 @@
 // Aumenta o número de sys_timeouts disponíveis (padrão pode ser 10)
 #define MEMP_NUM_SYS_TIMEOUT 20
 
-// Opcional: aumentar também outros pools caso necessário, comunicação (MQTT) e memória
+// Opcional: aumentar também outros pools caso necessário
 #define MEMP_NUM_TCP_PCB 20
 #define MEMP_NUM_NETBUF 16
 #define MEMP_NUM_NETCONN 16
