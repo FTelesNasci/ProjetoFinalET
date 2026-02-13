@@ -1,3 +1,10 @@
+<<<<<<< HEAD
+=======
+// configuração inicial do firmware para Raspberry Pi Pico W
+// Inclusão das bibliotecas;
+// Conexões com os sensores
+
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 #include <stdio.h>
 #include "hardware/pwm.h"
 #include "pico/stdlib.h"
@@ -13,12 +20,17 @@
 #include "ssd1306.h"
 
 // Wi-fi
+<<<<<<< HEAD
 //#define WIFI_SSID "Lu e Deza"
 //#define WIFI_SENHA "liukin1208"
+=======
+<<<<<<<< HEAD:ProjetoFinalCurso/ProjetoFinalCurso.c
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 // #define WIFI_SSID "ITSelf"
 // #define WIFI_SENHA "code2020"
 #define WIFI_SSID "Teles"
 #define WIFI_SENHA "Sophia2013%"
+<<<<<<< HEAD
 
 
 // Configurações MQTT
@@ -27,6 +39,21 @@
 #define MQTT_TOPIC "embarca/tem_lux"
 
 // Variáveis Globais
+=======
+========
+#define WIFI_SSID "Lu e Deza"
+#define WIFI_SENHA "liukin1208"
+//#define WIFI_SSID "ITSelf"
+//#define WIFI_SENHA "code2020"
+>>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647:AlteracaoProjetoFinalCurso/ProjetoFinalCurso.c
+
+// Configurações MQTT
+#define MQTT_BROKER "broker.hivemq.com" // Localização do IP da conexão com o MQTT
+#define MQTT_BROKER_PORT 1883 // Porta de comunicação
+#define MQTT_TOPIC "embarca/tem_lux" //status do sensor de luminosidade
+
+// Variáveis Globais de comunicação para dizer o funcionamento do sistema MQTT
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 static mqtt_client_t *mqtt_client;
 static ip_addr_t broker_ip;
 static bool mqtt_connected = false;
@@ -36,10 +63,18 @@ volatile bool buzzer_alarm = false;
 // =======================================================
 // CONFIGURAÇÃO DE PINOS E CONSTANTES
 // =======================================================
+<<<<<<< HEAD
+=======
+// Sensores 
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 #define I2C_PORT_AHT  i2c0
 #define SDA_AHT       0
 #define SCL_AHT       1
 
+<<<<<<< HEAD
+=======
+// e display
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 #define I2C_PORT_OLED i2c1
 #define SDA_OLED      14
 #define SCL_OLED      15
@@ -55,12 +90,21 @@ volatile bool buzzer_alarm = false;
 //=========================================================
 // Limiares de temperatura para controle do alarme (histerese)
 //=========================================================
+<<<<<<< HEAD
 #define TEMP_LIMIT_ON    27.0f          // Ligar alarme acima de 27°C
 #define TEMP_LIMIT_OFF   26.0f          // Desligar alarme abaixo de 26°C (histerese)
+=======
+#define TEMP_LIMIT_ON    32.0f          // Ligar alarme acima de 32°C
+#define TEMP_LIMIT_OFF   31.0f          // Desligar alarme abaixo de 31°C (histerese)
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 
 // =======================================================
 // ESTRUTURA DE DADOS PARA A FILA
 // =======================================================
+<<<<<<< HEAD
+=======
+// Armazenamento, medições, fila (FreeRTOS) e compartilhamento
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 typedef struct {
     float temperature;
     float humidity;
@@ -75,6 +119,14 @@ QueueHandle_t xSensorQueue;
 // =======================================================
 // PROTÓTIPOS DAS TASKS E FUNÇÕES
 // =======================================================
+<<<<<<< HEAD
+=======
+// Aquisição dos sensores;
+// Exibição;
+// Comunicação com o MQTT;
+// Temporização;
+// Integração
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 void TaskSensor(void *pv);
 void TaskBuzzer(void *pv);
 void TaskDisplay(void *pv);
@@ -88,9 +140,20 @@ void TaskMQTT(void *pv);
 // Protótipo das Funções
 static void mqtt_connection_callback(mqtt_client_t *client, void *arg, mqtt_connection_status_t status);
 void publish_msg(bool button_pressed, float temp_c);
+<<<<<<< HEAD
 //float read_temperature();
 void dns_check_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg);
 
+=======
+// Verificar essa variável abaixo;
+// Float read_temperature();
+void dns_check_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg);
+
+// Configuração dos periféricos;
+// Inicialização dos barramentos I2C (sensores e display);
+// Exibição de mensagens à Raspberry;
+// Conexão com IoT.
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 int main()
 {
     stdio_init_all();
@@ -119,6 +182,7 @@ int main()
     ssd1306_draw_string(28, 0, "Embarcatech");
 
     // Initialise the Wi-Fi chip
+<<<<<<< HEAD
     if (cyw43_arch_init()) {
         printf("Wi-Fi init failed\n");
         return -1;
@@ -127,6 +191,18 @@ int main()
     // Enable wifi station
     cyw43_arch_enable_sta_mode();
 
+=======
+    if (cyw43_arch_init()) 
+    {
+        printf("Wi-Fi init failed\n");
+        return -1;
+    }
+    // Conexão com a rede Wi-Fi
+    // Comunicação com IoT
+    // Enable wifi station
+    cyw43_arch_enable_sta_mode();
+    // Comunicação com o Wi-Fi
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
     printf("Connecting to Wi-Fi...\n");
     if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_SENHA, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
         printf("failed to connect.\n");
@@ -138,6 +214,7 @@ int main()
         printf("IP address %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
     }
 
+<<<<<<< HEAD
     // Inicializa cliente MQTT
     mqtt_client = mqtt_client_new();
 
@@ -148,6 +225,24 @@ int main()
     } else if (err == ERR_INPROGRESS) {
         printf("[DNS] Resolvendo...\n");
     } else {
+=======
+    // Inicializa a conexão com o MQTT
+    mqtt_client = mqtt_client_new();
+
+    // Resolve DNS do broker MQTT
+    // Comunicação e avisa se houve falha
+    err_t err = dns_gethostbyname(MQTT_BROKER, &broker_ip, dns_check_callback, NULL);
+    if (err == ERR_OK) 
+    {
+        dns_check_callback(MQTT_BROKER, &broker_ip, NULL);
+    } 
+    else if (err == ERR_INPROGRESS) 
+    {
+        printf("[DNS] Resolvendo...\n");
+    }
+     else 
+    {
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
         printf("[DNS] Erro ao resolver DNS: %d\n", err);
         return -1;
     }
@@ -181,6 +276,14 @@ int main()
     // -------------------
     // CRIA A QUEUE
     // -------------------
+<<<<<<< HEAD
+=======
+    // Criação da fila;
+    // Comunicação com a FreeRTOS;
+    // Inicialização das tarefa;
+    // Armazenamento e compartilhamento;
+    // Sensores, display, MQTT, Execução e Prioridades
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
     xSensorQueue = xQueueCreate(1, sizeof(SensorData_t));
     xQueueReset(xSensorQueue);
 
@@ -191,8 +294,18 @@ int main()
     xTaskCreate(TaskDisplay, "Display", 1024, NULL, 1, NULL);
     xTaskCreate(TaskSerial,  "Serial",  1024, NULL, 1, NULL);
     xTaskCreate(task_hello, "Hello", 1024, NULL, 1, NULL);
+<<<<<<< HEAD
     xTaskCreate(TaskMQTT, "MQTT", 2048, NULL, 2, NULL);
     xTaskCreate(TaskBuzzer, "Buzzer", 512, NULL, 2, NULL);
+=======
+<<<<<<<< HEAD:ProjetoFinalCurso/ProjetoFinalCurso.c
+    xTaskCreate(TaskMQTT, "MQTT", 4096, NULL, 2, NULL);
+
+========
+    xTaskCreate(TaskMQTT, "MQTT", 2048, NULL, 2, NULL);
+    xTaskCreate(TaskBuzzer, "Buzzer", 512, NULL, 2, NULL);
+>>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647:AlteracaoProjetoFinalCurso/ProjetoFinalCurso.c
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 
     vTaskStartScheduler();
 
@@ -203,6 +316,13 @@ int main()
 // =======================================================
 // WRAPPERS PARA O DRIVER DO AHT10
 // =======================================================
+<<<<<<< HEAD
+=======
+// Temporização;
+// Integração com os sensores ao FreeRTOS;
+// Gerenciamento da conexão com o MQQT;
+// Compartibilidade e confiabilidade com a comunicação.
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 int i2c_write_wrapper(uint8_t addr, const uint8_t *data, uint16_t len)
 {
     int r = i2c_write_blocking(I2C_PORT_AHT, addr, data, len, false);
@@ -220,16 +340,29 @@ void delay_ms_wrapper(uint32_t ms)
     vTaskDelay(pdMS_TO_TICKS(ms));
 }
 
+<<<<<<< HEAD
 // Callback de conexão MQTT
+=======
+
+// Callback de conexão MQTT
+// Tem a função de transmitir a informação, varredura, executa a função;
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 static void mqtt_connection_callback(mqtt_client_t *client, void *arg, mqtt_connection_status_t status) {
     if (status == MQTT_CONNECT_ACCEPTED) {
         printf("[MQTT] Conectado ao broker!\n");
         mqtt_connected = true;
+<<<<<<< HEAD
     } else {
+=======
+    } 
+    else 
+    {
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
         printf("[MQTT] Falha na conexão MQTT. Código: %d\n", status);
         mqtt_connected = false;
     }
 }
+<<<<<<< HEAD
 
 // Callback de DNS
 void dns_check_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
@@ -238,6 +371,20 @@ void dns_check_callback(const char *name, const ip_addr_t *ipaddr, void *callbac
         printf("[DNS] Resolvido: %s -> %s\n", name, ipaddr_ntoa(ipaddr));
 
         struct mqtt_connect_client_info_t client_info = {
+=======
+// Inicia a comunicação com o MQTT;
+// Serviço remoto;
+// Emissão periódica das mensagens
+// Callback de DNS
+void dns_check_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg) 
+{
+    if (ipaddr != NULL) 
+    {
+        broker_ip = *ipaddr;
+        printf("[DNS] Resolvido: %s -> %s\n", name, ipaddr_ntoa(ipaddr));
+        struct mqtt_connect_client_info_t client_info = 
+        {
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
             .client_id = "pico-client",
             .keep_alive = 60,
             .client_user = NULL,
@@ -250,11 +397,18 @@ void dns_check_callback(const char *name, const ip_addr_t *ipaddr, void *callbac
 
         printf("[MQTT] Conectando ao broker...\n");
         mqtt_client_connect(mqtt_client, &broker_ip, MQTT_BROKER_PORT, mqtt_connection_callback, NULL, &client_info);
+<<<<<<< HEAD
     } else {
+=======
+    } 
+    else 
+    {
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
         printf("[DNS] Falha ao resolver DNS para %s\n", name);
     }
 }
 
+<<<<<<< HEAD
 void task_hello(void *pvParameters)
 {
     while (1)
@@ -263,11 +417,28 @@ void task_hello(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
+=======
+ void task_hello(void *pvParameters)
+ {
+     while (1)
+     {
+         printf("Alô, Mundo! ou a task FreeRTOS\n");
+         vTaskDelay(pdMS_TO_TICKS(1000));
+     }
+ }
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 
 
 // =======================================================
 // TASK — SENSOR AHT10
 // =======================================================
+<<<<<<< HEAD
+=======
+// Comunicação entre os sensores;
+// Leitura dos sensores;
+// Armazenamento de dados;
+// Aquisição periódica.
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 void TaskSensor(void *pv)
 {
     AHT10_Handle aht10 = {
@@ -318,6 +489,12 @@ void TaskSensor(void *pv)
 // =======================================================
 // TASK — DISPLAY OLED
 // =======================================================
+<<<<<<< HEAD
+=======
+// Interface do sistema;
+// Atualização cíclica;
+// Atraso e estabilidade.
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
 void TaskDisplay(void *pv)
 {
     SensorData_t data;
@@ -352,8 +529,16 @@ void TaskDisplay(void *pv)
 // =======================================================
 // TASK — SERIAL (UART DEBUG)
 // =======================================================
+<<<<<<< HEAD
 void TaskSerial(void *pv)
 {
+=======
+// Leitura;
+// Exibição periódica dos dados;
+// MQTT
+ void TaskSerial(void *pv)
+ {
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
     SensorData_t data;
 
     while (1)
@@ -366,6 +551,7 @@ void TaskSerial(void *pv)
                    data.humidity);
         }
 
+<<<<<<< HEAD
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
@@ -373,6 +559,37 @@ void TaskSerial(void *pv)
 void publish_sensor_data(const SensorData_t *data)
 {
     if (!mqtt_connected) {
+=======
+       vTaskDelay(pdMS_TO_TICKS(500));
+    }
+ }
+
+
+// Adicionei agora
+// void TaskSerial(void *pv)
+// {
+//    SensorData_t data;
+
+//    while (1)
+//    {
+//        if (xQueuePeek(xSensorQueue, &data, portMAX_DELAY))
+//        {
+//            printf("Temp: %.2f C | Umid: %.2f %% | Luz: %.1f lx\n",
+//                   data.temperature,
+//                   data.humidity,
+//                   data.lux);
+//        }
+
+//        vTaskDelay(pdMS_TO_TICKS(5000));
+//    }
+//}
+
+
+void publish_sensor_data(const SensorData_t *data)
+{
+    if (!mqtt_connected)
+    {
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
         printf("[MQTT] Não conectado\n");
         return;
     }
@@ -389,7 +606,13 @@ void publish_sensor_data(const SensorData_t *data)
         data->humidity,
         data->lux
     );
+<<<<<<< HEAD
 
+=======
+// Publicação dos dados;
+// Registro de mensagem (erro ou acerto);
+// Leitura, fila, execução e transmissão;
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
     err_t err = mqtt_publish(
         mqtt_client,
         MQTT_TOPIC,
@@ -418,7 +641,11 @@ void TaskMQTT(void *pv)
             publish_sensor_data(&data);
         }
 
+<<<<<<< HEAD
         vTaskDelay(pdMS_TO_TICKS(2000)); // intervalo MQTT
+=======
+        vTaskDelay(pdMS_TO_TICKS(5000)); // intervalo MQTT
+>>>>>>> 6e91d33ca8b438889b584f4301b35d1c307ed647
     }
 }
 
